@@ -272,7 +272,7 @@ $ sudo apt install -y build-essential protobuf-compiler \
 MacOS:
 
 ```
-$ brew install protobuf automake
+$ brew install autoconf automake libtool pkg-config protobuf
 ```
 
 Once you have forked the repository, run the following to build and test Mosh:
