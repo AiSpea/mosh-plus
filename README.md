@@ -63,6 +63,105 @@ Getting Mosh
   packages for many operating systems, as well as instructions for building
   from source.
 
+Installing the mouse-enabled build from source
+----------------------------------------------
+
+  The mouse-forwarding functionality lives behind the normal Mosh build system
+  and does not require any special configuration flags. To build from a fresh
+  clone, install the standard build dependencies (see "Notes for developers"
+  below) and then run:
+
+  ```
+  $ ./autogen.sh
+  $ ./configure
+  $ make
+  $ sudo make install    # optional, installs into /usr/local by default
+  ```
+
+  These steps produce `mosh-client`, `mosh-server`, and the wrapper script with
+  mouse support. You can also copy the `src/frontend/mosh-{client,server}`
+  binaries out of the build tree if you prefer not to install system-wide.
+
+Creating binary release artifacts
+---------------------------------
+
+  The repository now ships with an enhanced `scripts/package-release.sh`, which
+  automates a reproducible out-of-tree install and collects the resulting
+  binaries into a compressed tarball alongside a SHA-256 checksum. The script
+  accepts optional `TARGET_OS`, `TARGET_ARCH`, and `PACKAGE_FORMATS`
+  environment variables so you can create native bundles for Linux, macOS on
+  Intel or Apple Silicon, or other supported hosts:
+
+  ```
+  $ TARGET_OS=linux TARGET_ARCH=arm64 PACKAGE_FORMATS=deb,rpm \
+      scripts/package-release.sh
+  $ ls build/release/artifacts
+  mosh-plus-1.4.0-abcd123-linux-arm64.tar.gz
+  mosh-plus-1.4.0-abcd123-linux-arm64.tar.gz.sha256
+  mosh-plus_1.4.0-abcd123_arm64.deb
+  mosh-plus-1.4.0-abcd123.aarch64.rpm
+  ```
+
+  The tarballs contain the `/usr/local` tree created by `make install`, so you
+  can unpack them on a target system with root privileges to deploy the
+  binaries:
+
+  ```
+  # tar -C /usr/local -xzf mosh-plus-1.4.0-abcd123-linux-arm64.tar.gz
+  ```
+
+  When `PACKAGE_FORMATS` includes `deb` or `rpm` the script uses
+  [`fpm`](https://fpm.readthedocs.io/) to turn the staged install tree into
+  packages consumable by `apt`/`dpkg` and `yum`/`dnf`. This makes it possible to
+  ship native Linux packages alongside the compressed archives without
+  maintaining separate packaging specs.
+
+  For GitHub-hosted projects, publishing a release automatically triggers the
+  `build-and-release` workflow under `.github/workflows/release.yml`. The job
+  now builds on Ubuntu (amd64 and arm64) and macOS (Intel and Apple Silicon),
+  installs the necessary build dependencies, invokes the packaging script with
+  the appropriate environment, and uploads the tarballs, checksums, and native
+  packages as release assets. You can also launch the workflow manually via the
+  “Run workflow” button if you want fresh artifacts without cutting a tag.
+
+Installing prebuilt packages
+----------------------------
+
+  Every release publishes ready-to-install bundles for the most common package
+  managers. After downloading the asset that matches your platform, install it
+  with the native tooling:
+
+  * **Debian/Ubuntu (amd64 or arm64)**
+
+    ```
+    $ sudo apt install ./mosh-plus_1.4.0-abcd123_amd64.deb
+    ```
+
+  * **Fedora/RHEL/CentOS (x86_64 or aarch64)**
+
+    ```
+    $ sudo dnf install mosh-plus-1.4.0-abcd123.x86_64.rpm
+    ```
+
+    Replace `dnf` with `yum` on older distributions.
+
+  * **macOS (Intel or Apple Silicon)**
+
+    ```
+    $ sudo tar -C /usr/local -xzf mosh-plus-1.4.0-abcd123-darwin-arm64.tar.gz
+    ```
+
+  Users who prefer to let Homebrew track the installation can tap the formula
+  shipped with the repository:
+
+  ```
+  $ brew tap mosh-plus/tap https://github.com/mosh-plus/mosh-plus.git
+  $ brew install mosh-plus
+  ```
+
+  The tap exposes the HEAD build by default so you can stay current between
+  tagged releases. See `Formula/mosh-plus.rb` for the full formula definition.
+
   Note that `mosh-client` receives an AES session key as an environment
   variable.  If you are porting Mosh to a new operating system, please make
   sure that a running process's environment variables are not readable by other
@@ -83,6 +182,19 @@ Usage
   `$PATH`, `mosh` accepts the arguments `--client=PATH` and `--server=PATH` to
   select alternate locations. More options are documented in the mosh(1) manual
   page.
+
+  Mouse input forwarding is disabled by default to preserve compatibility.
+  When both the local client and remote server are running this fork, pass the
+  `--enable-mouse` option to `mosh` to activate experimental forwarding of
+  scroll, click, and movement events:
+
+  ```
+  $ mosh --enable-mouse [user@]host
+  ```
+
+  The wrapper will ensure that the flag propagates to both the client and
+  server binaries. Applications such as `vim`, `htop`, and `less` can then
+  receive translated xterm mouse sequences over the PTY.
 
   There are [more examples](https://mosh.org/#usage) and a
   [FAQ](https://mosh.org/#faq) on the Mosh web site.

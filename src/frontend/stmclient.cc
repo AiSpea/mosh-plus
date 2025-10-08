@@ -32,6 +32,8 @@
 
 #include "src/include/config.h"
 
+#include <cctype>
+#include <cstdint>
 #include <cerrno>
 #include <clocale>
 #include <csignal>
@@ -262,6 +264,9 @@ void STMClient::main_init( void )
   Terminal::Complete local_terminal( window_size.ws_col, window_size.ws_row );
   network = NetworkPointer( new NetworkType( blank, local_terminal, key.c_str(), ip.c_str(), port.c_str() ) );
 
+  uint32_t capabilities = mouse_enabled ? Network::MOSH_CAP_MOUSE : 0;
+  network->set_capabilities( capabilities );
+
   network->set_send_delay( 1 ); /* minimal delay on outgoing keystrokes */
 
   /* tell server the size of the terminal */
@@ -307,6 +312,97 @@ void STMClient::process_network_input( void )
     network->get_latest_remote_state().state.get_echo_ack() );
 }
 
+bool STMClient::remote_mouse_supported( void ) const
+{
+  return mouse_enabled && network && network->supports_capability( Network::MOSH_CAP_MOUSE );
+}
+
+void STMClient::send_mouse_event( const Network::MouseEvent& event )
+{
+  if ( !network || network->shutdown_in_progress() ) {
+    return;
+  }
+
+  network->get_current_state().push_back( event );
+}
+
+STMClient::MouseParseResult STMClient::parse_mouse_sequence( const std::string& buffer,
+                                                             size_t start,
+                                                             size_t& consumed,
+                                                             Network::MouseEvent& event ) const
+{
+  consumed = 0;
+
+  if ( start >= buffer.size() ) {
+    return MouseParseResult::NotMouse;
+  }
+
+  if ( buffer[start] != '\x1b' ) {
+    return MouseParseResult::NotMouse;
+  }
+
+  if ( buffer.size() - start < 3 ) {
+    return MouseParseResult::NeedMore;
+  }
+
+  if ( buffer[start + 1] != '[' || buffer[start + 2] != '<' ) {
+    return MouseParseResult::NotMouse;
+  }
+
+  size_t pos = start + 3;
+  std::string fields[3];
+  int field = 0;
+
+  while ( pos < buffer.size() ) {
+    unsigned char c = buffer[pos];
+    if ( std::isdigit( c ) ) {
+      fields[field].push_back( static_cast<char>( c ) );
+    } else if ( c == ';' ) {
+      field++;
+      if ( field >= 3 ) {
+        return MouseParseResult::NotMouse;
+      }
+    } else if ( ( c == 'M' ) || ( c == 'm' ) ) {
+      if ( field != 2 ) {
+        return MouseParseResult::NotMouse;
+      }
+
+      if ( fields[0].empty() || fields[1].empty() || fields[2].empty() ) {
+        return MouseParseResult::NotMouse;
+      }
+
+      uint32_t cb = static_cast<uint32_t>( std::strtoul( fields[0].c_str(), nullptr, 10 ) );
+      uint32_t x = static_cast<uint32_t>( std::strtoul( fields[1].c_str(), nullptr, 10 ) );
+      uint32_t y = static_cast<uint32_t>( std::strtoul( fields[2].c_str(), nullptr, 10 ) );
+
+      event = Network::MouseEvent( Network::MouseEvent::CLICK,
+                                   x,
+                                   y,
+                                   c == 'm',
+                                   cb & 0x3,
+                                   cb );
+
+      if ( cb & 0x40 ) {
+        event.type = ( cb & 0x1 ) ? Network::MouseEvent::SCROLL_DOWN : Network::MouseEvent::SCROLL_UP;
+        event.release = false;
+      } else if ( cb & 0x20 ) {
+        event.type = Network::MouseEvent::MOVE;
+      } else {
+        event.type = Network::MouseEvent::CLICK;
+      }
+
+      consumed = pos - start + 1;
+      return MouseParseResult::Parsed;
+    } else {
+      return MouseParseResult::NotMouse;
+    }
+
+    pos++;
+  }
+
+  return MouseParseResult::NeedMore;
+}
+
 bool STMClient::process_user_input( int fd )
 {
   const int buf_size = 16384;
@@ -334,8 +430,29 @@ bool STMClient::process_user_input( int fd )
     overlays.get_prediction_engine().reset();
   }
 
-  for ( int i = 0; i < bytes_read; i++ ) {
-    char the_byte = buf[i];
+  const bool supports_mouse = remote_mouse_supported();
+
+  std::string input_stream = mouse_sequence_buffer;
+  input_stream.append( buf, bytes_read );
+  mouse_sequence_buffer.clear();
+
+  size_t idx = 0;
+  while ( idx < input_stream.size() ) {
+    if ( supports_mouse ) {
+      Network::MouseEvent mouse_event;
+      size_t consumed = 0;
+      MouseParseResult result = parse_mouse_sequence( input_stream, idx, consumed, mouse_event );
+      if ( result == MouseParseResult::Parsed ) {
+        send_mouse_event( mouse_event );
+        idx += consumed;
+        continue;
+      } else if ( result == MouseParseResult::NeedMore ) {
+        mouse_sequence_buffer = input_stream.substr( idx );
+        break;
+      }
+    }
+
+    char the_byte = input_stream[idx++];
 
     if ( !paste ) {
       overlays.get_prediction_engine().new_user_byte( the_byte, local_framebuffer );

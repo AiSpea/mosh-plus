@@ -34,6 +34,7 @@
 #include "src/include/version.h"
 
 #include <cerrno>
+#include <cstdint>
 #include <clocale>
 #include <csignal>
 #include <cstdio>
@@ -42,6 +43,7 @@
 #include <ctime>
 #include <sstream>
 #include <typeinfo>
+#include <vector>
 
 #include <err.h>
 #include <fcntl.h>
@@ -104,13 +106,42 @@ static void serve( int host_fd,
                    long network_timeout,
                    long network_signaled_timeout );
 
+static std::string encode_mouse_event( const Network::MouseEvent& event )
+{
+  uint32_t cb = event.encoded;
+
+  if ( cb == 0 ) {
+    switch ( event.type ) {
+      case Network::MouseEvent::SCROLL_UP:
+        cb = 64;
+        break;
+      case Network::MouseEvent::SCROLL_DOWN:
+        cb = 65;
+        break;
+      case Network::MouseEvent::MOVE:
+        cb = ( event.button & 0x3 ) | 0x20;
+        break;
+      case Network::MouseEvent::CLICK:
+      default:
+        cb = event.button & 0x3;
+        break;
+    }
+  }
+
+  char final_char = event.release ? 'm' : 'M';
+  char buf[64];
+  snprintf( buf, sizeof( buf ), "\033[<%u;%u;%u%c", cb, event.x, event.y, final_char );
+  return std::string( buf );
+}
+
 static int run_server( const char* desired_ip,
                        const char* desired_port,
                        const std::string& command_path,
                        char* command_argv[],
                        const int colors,
                        unsigned int verbose,
-                       bool with_motd );
+                       bool with_motd,
+                       bool enable_mouse );
 
 static void print_version( FILE* file )
 {
@@ -192,6 +223,23 @@ int main( int argc, char* argv[] )
   unsigned int verbose = 0; /* don't close stdin/stdout/stderr */
   /* Will cause mosh-server not to correctly detach on old versions of sshd. */
   std::list<std::string> locale_vars;
+  bool enable_mouse = false;
+
+  std::vector<char*> argv_storage;
+  argv_storage.reserve( argc + 1 );
+  argv_storage.push_back( argv[0] );
+
+  for ( int i = 1; i < argc; i++ ) {
+    if ( 0 == strcmp( argv[i], "--enable-mouse" ) ) {
+      enable_mouse = true;
+      continue;
+    }
+    argv_storage.push_back( argv[i] );
+  }
+
+  argv_storage.push_back( nullptr );
+  argv = argv_storage.data();
+  argc = static_cast<int>( argv_storage.size() - 1 );
 
   /* strip off command */
   for ( int i = 1; i < argc; i++ ) {
@@ -372,7 +420,7 @@ int main( int argc, char* argv[] )
   }
 
   try {
-    return run_server( desired_ip, desired_port, command_path, command_argv, colors, verbose, with_motd );
+    return run_server( desired_ip, desired_port, command_path, command_argv, colors, verbose, with_motd, enable_mouse );
   } catch ( const Network::NetworkException& e ) {
     fprintf( stderr, "Network exception: %s\n", e.what() );
     return 1;
@@ -388,7 +436,8 @@ static int run_server( const char* desired_ip,
                        char* command_argv[],
                        const int colors,
                        unsigned int verbose,
-                       bool with_motd )
+                       bool with_motd,
+                       bool enable_mouse )
 {
   /* get network idle timeout */
   long network_timeout = 0;
@@ -435,6 +484,9 @@ static int run_server( const char* desired_ip,
   Network::UserStream blank;
   using NetworkPointer = std::shared_ptr<ServerConnection>;
   NetworkPointer network( new ServerConnection( terminal, blank, desired_ip, desired_port ) );
+
+  uint32_t capabilities = enable_mouse ? Network::MOSH_CAP_MOUSE : 0;
+  network->set_capabilities( capabilities );
 
   network->set_verbose( verbose );
   Select::set_verbose( verbose );
@@ -770,17 +822,24 @@ static void serve( int host_fd,
           us.apply_string( network.get_remote_diff() );
           /* apply userstream to terminal */
           for ( size_t i = 0; i < us.size(); i++ ) {
+            const Network::UserEvent& event = us.get_event( i );
+
+            if ( event.type == Network::MouseType ) {
+              terminal_to_host += encode_mouse_event( event.mouse );
+              continue;
+            }
+
             const Parser::Action& action = us.get_action( i );
-            if ( typeid( action ) == typeid( Parser::Resize ) ) {
+            if ( event.type == Network::ResizeType ) {
               /* apply only the last consecutive Resize action */
               if ( i < us.size() - 1 ) {
-                const Parser::Action& next = us.get_action( i + 1 );
-                if ( typeid( next ) == typeid( Parser::Resize ) ) {
+                const Network::UserEvent& next_event = us.get_event( i + 1 );
+                if ( next_event.type == Network::ResizeType ) {
                   continue;
                 }
               }
               /* tell child process of resize */
-              const Parser::Resize& res = static_cast<const Parser::Resize&>( action );
+              const Parser::Resize& res = event.resize;
               struct winsize window_size;
               if ( ioctl( host_fd, TIOCGWINSZ, &window_size ) < 0 ) {
                 perror( "ioctl TIOCGWINSZ" );

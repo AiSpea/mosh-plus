@@ -46,7 +46,8 @@ Transport<MyState, RemoteState>::Transport( MyState& initial_state,
                                             const char* desired_port )
   : connection( desired_ip, desired_port ), sender( &connection, initial_state ),
     received_states( 1, TimestampedState<RemoteState>( timestamp(), 0, initial_remote ) ),
-    receiver_quench_timer( 0 ), last_receiver_state( initial_remote ), fragments(), verbose( 0 )
+    receiver_quench_timer( 0 ), last_receiver_state( initial_remote ), fragments(), verbose( 0 ),
+    local_capabilities( 0 ), remote_capabilities( 0 )
 {
   /* server */
 }
@@ -59,7 +60,8 @@ Transport<MyState, RemoteState>::Transport( MyState& initial_state,
                                             const char* port )
   : connection( key_str, ip, port ), sender( &connection, initial_state ),
     received_states( 1, TimestampedState<RemoteState>( timestamp(), 0, initial_remote ) ),
-    receiver_quench_timer( 0 ), last_receiver_state( initial_remote ), fragments(), verbose( 0 )
+    receiver_quench_timer( 0 ), last_receiver_state( initial_remote ), fragments(), verbose( 0 ),
+    local_capabilities( 0 ), remote_capabilities( 0 )
 {
   /* client */
 }
@@ -75,6 +77,10 @@ void Transport<MyState, RemoteState>::recv( void )
 
     if ( inst.protocol_version() != MOSH_PROTOCOL_VERSION ) {
       throw NetworkException( "mosh protocol version mismatch", 0 );
+    }
+
+    if ( inst.has_capabilities() ) {
+      remote_capabilities = inst.capabilities();
     }
 
     sender.process_acknowledgment_through( inst.ack_num() );
