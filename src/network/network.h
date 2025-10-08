@@ -51,6 +51,7 @@ using namespace Crypto;
 
 namespace Network {
 static const unsigned int MOSH_PROTOCOL_VERSION = 2; /* bumped for echo-ack */
+static const uint32_t MOSH_CAP_MOUSE = 1U << 0;
 
 uint64_t timestamp( void );
 uint16_t timestamp16( void );

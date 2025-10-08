@@ -89,6 +89,18 @@ std::string UserStream::diff_from( const UserStream& existing ) const
         new_inst->MutableExtension( resize )->set_width( my_it->resize.width );
         new_inst->MutableExtension( resize )->set_height( my_it->resize.height );
       } break;
+      case MouseType: {
+        Instruction* new_inst = output.add_instruction();
+        ClientBuffers::MouseEvent* mouse_inst = new_inst->MutableExtension( mouse );
+        mouse_inst->set_type( static_cast<ClientBuffers::MouseEvent_Type>( my_it->mouse.type ) );
+        mouse_inst->set_x( my_it->mouse.x );
+        mouse_inst->set_y( my_it->mouse.y );
+        mouse_inst->set_release( my_it->mouse.release );
+        mouse_inst->set_button( my_it->mouse.button );
+        if ( my_it->mouse.encoded ) {
+          mouse_inst->set_encoded( my_it->mouse.encoded );
+        }
+      } break;
       default:
         assert( !"unexpected event type" );
         break;
@@ -114,6 +126,15 @@ void UserStream::apply_string( const std::string& diff )
     } else if ( input.instruction( i ).HasExtension( resize ) ) {
       actions.push_back( UserEvent( Resize( input.instruction( i ).GetExtension( resize ).width(),
                                             input.instruction( i ).GetExtension( resize ).height() ) ) );
+    } else if ( input.instruction( i ).HasExtension( mouse ) ) {
+      const ClientBuffers::MouseEvent& mouse_inst = input.instruction( i ).GetExtension( mouse );
+      MouseEvent::Type type = static_cast<MouseEvent::Type>( mouse_inst.type() );
+      uint32_t x = mouse_inst.has_x() ? mouse_inst.x() : 0;
+      uint32_t y = mouse_inst.has_y() ? mouse_inst.y() : 0;
+      bool release = mouse_inst.has_release() ? mouse_inst.release() : false;
+      uint32_t button = mouse_inst.has_button() ? mouse_inst.button() : 0;
+      uint32_t encoded = mouse_inst.has_encoded() ? mouse_inst.encoded() : 0;
+      actions.push_back( UserEvent( MouseEvent( type, x, y, release, button, encoded ) ) );
     }
   }
 }
@@ -125,6 +146,10 @@ const Parser::Action& UserStream::get_action( unsigned int i ) const
       return actions[i].userbyte;
     case ResizeType:
       return actions[i].resize;
+    case MouseType: {
+      static const Parser::Ignore ignore;
+      return ignore;
+    }
     default:
       assert( !"unexpected action type" );
       static const Parser::Ignore nothing = Parser::Ignore();

@@ -15,4 +15,9 @@ message Instruction {
   optional bytes diff = 6;
 
   optional bytes chaff = 7;
+
+  // Bitmask describing the capabilities supported by the sender. Introduced
+  // for negotiating optional features such as mouse forwarding while
+  // remaining backward compatible with older peers.
+  optional uint32 capabilities = 8;
 }

@@ -21,7 +21,24 @@ message ResizeMessage {
   optional int32 height = 6;
 }
 
+message MouseEvent {
+  enum Type {
+    MOVE = 0;
+    CLICK = 1;
+    SCROLL_UP = 2;
+    SCROLL_DOWN = 3;
+  }
+
+  optional Type type = 1;
+  optional uint32 x = 2;
+  optional uint32 y = 3;
+  optional bool release = 4;
+  optional uint32 button = 5;
+  optional uint32 encoded = 6;
+}
+
 extend Instruction {
   optional Keystroke keystroke = 2;
   optional ResizeMessage resize = 3;
+  optional MouseEvent mouse = 4;
 }

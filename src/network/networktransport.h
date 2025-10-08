@@ -34,6 +34,7 @@
 #define NETWORK_TRANSPORT_HPP
 
 #include <csignal>
+#include <cstdint>
 #include <ctime>
 #include <list>
 #include <string>
@@ -63,6 +64,8 @@ private:
   RemoteState last_receiver_state; /* the state we were in when user last queried state */
   FragmentAssembly fragments;
   unsigned int verbose;
+  uint32_t local_capabilities;
+  uint32_t remote_capabilities;
 
 public:
   Transport( MyState& initial_state,
@@ -117,6 +120,15 @@ public:
   }
 
   void set_send_delay( int new_delay ) { sender.set_send_delay( new_delay ); }
+
+  void set_capabilities( uint32_t caps )
+  {
+    local_capabilities = caps;
+    sender.set_capabilities( caps );
+  }
+
+  uint32_t get_remote_capabilities( void ) const { return remote_capabilities; }
+  bool supports_capability( uint32_t cap ) const { return ( remote_capabilities & cap ) == cap; }
 
   uint64_t get_sent_state_acked_timestamp( void ) const { return sender.get_sent_state_acked_timestamp(); }
   uint64_t get_sent_state_acked( void ) const { return sender.get_sent_state_acked(); }

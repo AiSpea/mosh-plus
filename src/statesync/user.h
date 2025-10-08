@@ -34,6 +34,7 @@
 #define USER_HPP
 
 #include <cassert>
+#include <cstdint>
 #include <deque>
 #include <list>
 #include <string>
@@ -44,7 +45,41 @@ namespace Network {
 enum UserEventType
 {
   UserByteType = 0,
-  ResizeType = 1
+  ResizeType = 1,
+  MouseType = 2
+};
+
+struct MouseEvent
+{
+  enum Type
+  {
+    MOVE = 0,
+    CLICK = 1,
+    SCROLL_UP = 2,
+    SCROLL_DOWN = 3
+  };
+
+  Type type;
+  uint32_t x;
+  uint32_t y;
+  bool release;
+  uint32_t button;
+  uint32_t encoded;
+
+  MouseEvent( Type s_type = MOVE,
+              uint32_t s_x = 0,
+              uint32_t s_y = 0,
+              bool s_release = false,
+              uint32_t s_button = 0,
+              uint32_t s_encoded = 0 )
+    : type( s_type ), x( s_x ), y( s_y ), release( s_release ), button( s_button ), encoded( s_encoded )
+  {}
+
+  bool operator==( const MouseEvent& other ) const
+  {
+    return ( type == other.type ) && ( x == other.x ) && ( y == other.y ) && ( release == other.release )
+           && ( button == other.button ) && ( encoded == other.encoded );
+  }
 };
 
 class UserEvent
@@ -53,10 +88,13 @@ public:
   UserEventType type;
   Parser::UserByte userbyte;
   Parser::Resize resize;
+  MouseEvent mouse;
 
-  UserEvent( const Parser::UserByte& s_userbyte ) : type( UserByteType ), userbyte( s_userbyte ), resize( -1, -1 )
+  UserEvent( const Parser::UserByte& s_userbyte )
+    : type( UserByteType ), userbyte( s_userbyte ), resize( -1, -1 ), mouse()
   {}
-  UserEvent( const Parser::Resize& s_resize ) : type( ResizeType ), userbyte( 0 ), resize( s_resize ) {}
+  UserEvent( const Parser::Resize& s_resize ) : type( ResizeType ), userbyte( 0 ), resize( s_resize ), mouse() {}
+  UserEvent( const MouseEvent& s_mouse ) : type( MouseType ), userbyte( 0 ), resize( -1, -1 ), mouse( s_mouse ) {}
 
 private:
   UserEvent();
@@ -64,7 +102,7 @@ private:
 public:
   bool operator==( const UserEvent& x ) const
   {
-    return ( type == x.type ) && ( userbyte == x.userbyte ) && ( resize == x.resize );
+    return ( type == x.type ) && ( userbyte == x.userbyte ) && ( resize == x.resize ) && ( mouse == x.mouse );
   }
 };
 
@@ -78,10 +116,12 @@ public:
 
   void push_back( const Parser::UserByte& s_userbyte ) { actions.push_back( UserEvent( s_userbyte ) ); }
   void push_back( const Parser::Resize& s_resize ) { actions.push_back( UserEvent( s_resize ) ); }
+  void push_back( const MouseEvent& s_mouse ) { actions.push_back( UserEvent( s_mouse ) ); }
 
   bool empty( void ) const { return actions.empty(); }
   size_t size( void ) const { return actions.size(); }
   const Parser::Action& get_action( unsigned int i ) const;
+  const UserEvent& get_event( unsigned int i ) const { return actions[i]; }
 
   /* interface for Network::Transport */
   void subtract( const UserStream* prefix );
