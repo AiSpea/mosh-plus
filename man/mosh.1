@@ -155,6 +155,14 @@ if its value is 'yes'.
 Synonym for \-\-predict\-overwrite
 
 .TP
+.B \-\-enable-mouse
+Enable experimental forwarding of mouse scroll, click, and movement
+events when supported by both client and server. This option is
+disabled by default for compatibility with older releases. It is safe
+to pass even if the remote side lacks support; the connection will
+automatically fall back to standard keyboard-only input.
+
+.TP
 .B \-\-family=inet
 Only use IPv4 for the SSH connection and Mosh session.
 
@@ -222,6 +230,14 @@ the SSH connection appear to come from localhost.
 
 With \-\-bind\-server=\fIIP\fP, the server will attempt to bind to the
 specified IP address.
+
+.TP
+.B \-\-enable\-mouse
+Enable experimental forwarding of mouse input. When set, \fBmosh\fP captures
+scroll, button, and motion events from the local terminal and sends them to the
+server using Xterm-compatible escape sequences. This option must be supported
+by both the client and server and is disabled by default to preserve
+compatibility.
 
 .TP
 .B \-\-no\-init

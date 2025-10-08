@@ -34,6 +34,7 @@
 #include "src/include/version.h"
 
 #include <cstdlib>
+#include <vector>
 
 #include <unistd.h>
 
@@ -85,7 +86,7 @@ static void print_usage( FILE* file, const char* argv0 )
 {
   print_version( file );
   fprintf( file,
-           "\nUsage: %s [-# 'ARGS'] IP PORT\n"
+           "\nUsage: %s [--enable-mouse] [-# 'ARGS'] IP PORT\n"
            "       %s -c\n",
            argv0,
            argv0 );
@@ -117,6 +118,23 @@ int main( int argc, char* argv[] )
 
   /* Detect edge case */
   fatal_assert( argc > 0 );
+
+  bool enable_mouse = false;
+  std::vector<char*> argv_storage;
+  argv_storage.reserve( argc + 1 );
+  argv_storage.push_back( argv[0] );
+
+  for ( int i = 1; i < argc; i++ ) {
+    if ( 0 == strcmp( argv[i], "--enable-mouse" ) ) {
+      enable_mouse = true;
+      continue;
+    }
+    argv_storage.push_back( argv[i] );
+  }
+
+  argv_storage.push_back( nullptr );
+  argv = argv_storage.data();
+  argc = static_cast<int>( argv_storage.size() - 1 );
 
   /* Get arguments */
   for ( int i = 1; i < argc; i++ ) {
@@ -194,7 +212,7 @@ int main( int argc, char* argv[] )
 
   bool success = false;
   try {
-    STMClient client( ip, desired_port, key.c_str(), predict_mode, verbose, predict_overwrite );
+    STMClient client( ip, desired_port, key.c_str(), predict_mode, verbose, predict_overwrite, enable_mouse );
     client.init();
 
     try {

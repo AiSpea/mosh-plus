@@ -86,6 +86,8 @@ my $ssh_pty = 1;
 my $help = undef;
 my $version = undef;
 
+my $enable_mouse = 0;
+
 my @cmdline = @ARGV;
 
 my $usage =
@@ -113,6 +115,7 @@ qq{Usage: $0 [options] [--] [user@]host [command...]
                                 (No effect on server-side SSH port)
         --bind-server={ssh|any|IP}  ask the server to reply from an IP address
                                        (default: "ssh")
+        --enable-mouse         enable mouse event forwarding (experimental)
 
         --ssh=COMMAND        ssh command to run when setting up session
                                 (example: "ssh -p 2222")
@@ -166,12 +169,13 @@ GetOptions( 'client=s' => \$client,
 	    'ssh=s' => sub { @ssh = shellwords($_[1]); },
 	    'ssh-pty!' => \$ssh_pty,
 	    'init!' => \$term_init,
-	    'local' => \$localhost,
-	    'help' => \$help,
-	    'version' => \$version,
-	    'fake-proxy!' => \my $fake_proxy,
-	    'bind-server=s' => \$bind_ip,
-	    'experimental-remote-ip=s' => \$use_remote_ip) or die $usage;
+            'local' => \$localhost,
+            'help' => \$help,
+            'version' => \$version,
+            'fake-proxy!' => \my $fake_proxy,
+            'bind-server=s' => \$bind_ip,
+            'enable-mouse!' => \$enable_mouse,
+            'experimental-remote-ip=s' => \$use_remote_ip) or die $usage;
 
 if ( defined $help ) {
     print $usage;
@@ -384,6 +388,8 @@ if ( $pid == 0 ) { # child
     push @server, ( '-p', $port_request );
   }
 
+  push @server, '--enable-mouse' if $enable_mouse;
+
   for ( &locale_vars ) {
     push @server, ( '-l', $_ );
   }
@@ -462,7 +468,10 @@ if ( $pid == 0 ) { # child
   $ENV{ 'MOSH_KEY' } = $key;
   $ENV{ 'MOSH_PREDICTION_DISPLAY' } = $predict;
   $ENV{ 'MOSH_NO_TERM_INIT' } = '1' if !$term_init;
-  exec {$client} ("$client", "-# @cmdline |", $ip, $port);
+  my @client_args = ("$client");
+  push @client_args, '--enable-mouse' if $enable_mouse;
+  push @client_args, "-# @cmdline |", $ip, $port;
+  exec {$client} @client_args;
 }
 
 sub shell_quote { join ' ', map {(my $a = $_) =~ s/'/'\\''/g; "'$a'"} @_ }

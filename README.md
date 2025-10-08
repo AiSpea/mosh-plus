@@ -63,6 +63,55 @@ Getting Mosh
   packages for many operating systems, as well as instructions for building
   from source.
 
+Installing the mouse-enabled build from source
+----------------------------------------------
+
+  The mouse-forwarding functionality lives behind the normal Mosh build system
+  and does not require any special configuration flags. To build from a fresh
+  clone, install the standard build dependencies (see "Notes for developers"
+  below) and then run:
+
+  ```
+  $ ./autogen.sh
+  $ ./configure
+  $ make
+  $ sudo make install    # optional, installs into /usr/local by default
+  ```
+
+  These steps produce `mosh-client`, `mosh-server`, and the wrapper script with
+  mouse support. You can also copy the `src/frontend/mosh-{client,server}`
+  binaries out of the build tree if you prefer not to install system-wide.
+
+Creating binary release artifacts
+---------------------------------
+
+  The repository now ships with `scripts/package-release.sh`, which automates a
+  reproducible out-of-tree install and collects the resulting binaries into a
+  compressed tarball alongside a SHA-256 checksum. Running the script from the
+  project root produces `build/release/artifacts/mosh-plus-<version>-<sha>-linux-amd64.tar.gz`:
+
+  ```
+  $ scripts/package-release.sh
+  $ ls build/release/artifacts
+  mosh-plus-1.4.0-abcd123-linux-amd64.tar.gz
+  mosh-plus-1.4.0-abcd123-linux-amd64.tar.gz.sha256
+  ```
+
+  The tarball contains the `/usr/local` tree created by `make install`, so you
+  can unpack it on a target system with root privileges to deploy the binaries:
+
+  ```
+  # tar -C /usr/local -xzf mosh-plus-1.4.0-abcd123-linux-amd64.tar.gz
+  ```
+
+  For GitHub-hosted projects, publishing a release automatically triggers the
+  `build-and-release` workflow under `.github/workflows/release.yml`. The job
+  installs the necessary build dependencies, invokes the packaging script, and
+  uploads both the tarball and checksum as release assets so they are available
+  for download without having to build from source locally. You can also launch
+  the workflow manually via the “Run workflow” button if you want fresh
+  artifacts without cutting a tag.
+
   Note that `mosh-client` receives an AES session key as an environment
   variable.  If you are porting Mosh to a new operating system, please make
   sure that a running process's environment variables are not readable by other
@@ -83,6 +132,19 @@ Usage
   `$PATH`, `mosh` accepts the arguments `--client=PATH` and `--server=PATH` to
   select alternate locations. More options are documented in the mosh(1) manual
   page.
+
+  Mouse input forwarding is disabled by default to preserve compatibility.
+  When both the local client and remote server are running this fork, pass the
+  `--enable-mouse` option to `mosh` to activate experimental forwarding of
+  scroll, click, and movement events:
+
+  ```
+  $ mosh --enable-mouse [user@]host
+  ```
+
+  The wrapper will ensure that the flag propagates to both the client and
+  server binaries. Applications such as `vim`, `htop`, and `less` can then
+  receive translated xterm mouse sequences over the PTY.
 
   There are [more examples](https://mosh.org/#usage) and a
   [FAQ](https://mosh.org/#faq) on the Mosh web site.

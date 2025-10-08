@@ -32,6 +32,7 @@ src/include/config.h.in~
 /install-sh
 /missing
 /mosh-*.tar.gz
+/build/
 src/include/stamp-h1
 /test-driver
 /VERSION

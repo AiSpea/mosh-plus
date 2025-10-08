@@ -33,6 +33,7 @@
 #ifndef TRANSPORT_SENDER_HPP
 #define TRANSPORT_SENDER_HPP
 
+#include <cstdint>
 #include <list>
 #include <string>
 
@@ -107,6 +108,8 @@ private:
 
   uint64_t mindelay_clock; /* time of first pending change to current state */
 
+  uint32_t capabilities;
+
 public:
   /* constructor */
   TransportSender( Connection* s_connection, MyState& initial_state );
@@ -163,6 +166,9 @@ public:
   bool shutdown_ack_timed_out( void ) const;
 
   void set_send_delay( int new_delay ) { SEND_MINDELAY = new_delay; }
+
+  void set_capabilities( uint32_t caps ) { capabilities = caps; }
+  uint32_t get_capabilities( void ) const { return capabilities; }
 
   unsigned int send_interval( void ) const;
 
